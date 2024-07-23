@@ -2,7 +2,8 @@ const express = require("express");
 const { request } = require("http");
 
 const app = express();
-
+// MOCK
+// Simulation de données en mémoire
 let DB_ARTICLES = [
 	{
 		id: 1,
@@ -61,6 +62,7 @@ app.delete("/articles/:id", (request, response) => {
 	return response.json({message : "deleted"})
 });
 
+// Démarrer le serveur
 app.listen(3000, () => {
 	console.log("le serveur a démarrer");
 });
