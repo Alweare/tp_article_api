@@ -72,7 +72,7 @@ app.delete("/articles/:id", (request, response) => {
 	}
 
 
-	DB_ARTICLES.slice(idADelete, 1);
+	DB_ARTICLES.splice(idADelete, 1);
 	return response.json({ message: "deleted" });
 });
 
