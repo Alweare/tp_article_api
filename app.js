@@ -25,21 +25,71 @@ mongoose.connection.on('error', (err) => {
 mongoose.connect("mongodb://localhost:27017/db_article")
 
 const Article = mongoose.model('Article', { uid: String, title: String, content: String, author: String }, 'articles');
+//---------------------------------BDD-----------------------------//
+
+//------------------------------Routes-----------------------------//
+/**
+ * Fonction utilitaire pour retourner une structure de réponse métier
+ * @param {*} response
+ * @param {*} code
+ * @param {*} message
+ * @param {*} data
+ * @returns
+ */
+
+
+// Middleware
+function authMiddleware(request, response, next) {
+	// Si token null alors erreur
+	if (request.headers.authorization == undefined || !request.headers.authorization) {
+		return response.json({ message: "Token null" });
+	}
+
+	// Extraire le token (qui est bearer)
+	const token = request.headers.authorization.substring(7);
+
+	// par defaut le result est null
+	let result = null;
+
+	// Si reussi à générer le token sans crash
+	try {
+		result = jwt.verify(token, JWT_SECRET);
+	} catch {
+	}
+
+	// Si result null donc token incorrect
+	if (!result) {
+		return response.json({ message: "token pas bon" });
+	}
+
+	// On passe le middleware
+	next();
+}
+
+
+function performResponseService(response, code, message, data) {
+	return response.json({ code: code, message: message, data: data });
+}
 
 app.get('/articles', async (request, response) => {
 
 	const articles = await Article.find();
 
-	return response.json(articles);
-
+	return performResponseService(response, '200', `La liste des articles a été récupérés avec succès`, articles);
 
 });
 app.get('/article/:id', async (request, response) => {
 	const idParam = request.params.id;
 
-	const foundArticle = await Article.findOne({ uid: idParam });
-	return response.json(foundArticle);
 
+	const foundArticle = await Article.findOne({ uid: idParam });
+
+	if (!foundArticle) {
+		return performResponseService(response, '702', ` Impossible de récupérer un article avec l'UID ${idParam} | Null`, null);
+
+	}
+
+	return performResponseService(response, '200', `Article récupéré avec succès`, foundArticle);
 
 });
 app.post('/save-article', async (request, response) => {
@@ -47,26 +97,33 @@ app.post('/save-article', async (request, response) => {
 	const articleJson = request.body;
 	let articleFound = null;
 
+
+
 	if (articleJson.uid != undefined || articleJson.uid) {
 		articleFound = Article.findOne({ uid: articleJson.uid });
+
+		if (!articleFound) {
+
+			return performResponseService(response, '701', `Impossible de modifier un article inexistant`, articleJson);
+		}
+		if (Article.findOne({ title: articleJson.title, uid: { $ne: articleJson.uid } })) {
+
+			return performResponseService(response, '701', `Impossible de modifier un article si un autre article possède un titre similaire`, null);
+		}
+		await articleFound.updateOne({ title: articleJson.title }, { content: articleJson.content }, { author: articleJson.author });
+
+		return performResponseService(response, '200', `Article modifié avec succès`, articleJson);
 	}
 
-	if (articleFound) {
-		// articleFound.title = articleJson.title;
-		// articleFound.content = articleJson.content;
-		// articleFound.author = articleJson.author;
-		await articleFound.updateOne({ title: articleJson.title }, { content: articleJson.content }, { author: articleJson.author })
+	if (Article.findOne(articleJson.title)) {
 
-
-		return response.json({ message: `L'article a été modifié avec succès` })
+		return response.json({ code: response.statusCode = 702, message: `Impossible d'ajouter un article avec un titre déjà existant`, data: `Null` });
 	}
-
-
 	articleJson.uid = uuidv4();
 	const createArticle = await Article.create(articleJson);
 	await createArticle.save();
 
-	return response.json(createArticle);
+	return response.json({ code: response.statusCode = 200, message: `Article ajouté avec succès`, data: createArticle });
 
 
 });
@@ -74,11 +131,15 @@ app.delete('/article/:id', async (request, response) => {
 
 	const uidParam = request.params.id;
 	const articleFound = Article.findOne({ uid: uidParam });
+	if (!articleFound) {
+		return performResponseService(response, '702', `Impossible de supprimer un article dont l'UID n'existe pas`, null);
+
+	}
+
 
 	await Article.deleteOne(articleFound);
 
-
-	return response.json({ message: "article supprimé" });
+	return performResponseService(response, '200', `delete avec succès`, articleJson);
 
 
 });
